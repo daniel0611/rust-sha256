@@ -1,4 +1,5 @@
 #![allow(dead_code)]
+#![feature(test)]
 
 use std::convert::TryInto;
 
@@ -167,8 +168,10 @@ impl Sha256 {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use crate::Sha256;
+    extern crate test;
+    use test::Bencher;
 
     // TODO: replace with more extensive tests
     #[test]
@@ -199,5 +202,14 @@ mod test {
         let mut sha = Sha256::new();
         sha.update_bytes(&[]);
         assert_eq!(sha.finish_hex(), "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")
+    }
+
+    #[bench]
+    fn bench_single_block(b: &mut Bencher) {
+        b.iter(|| {
+            let mut sha = Sha256::new();
+            sha.update_string("hallo");
+            sha.finish_hex()
+        })
     }
 }
