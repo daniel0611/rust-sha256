@@ -22,12 +22,13 @@ const K_CONST: [u32; 64] = [
     0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2,
 ];
 
-// TODO: will I hate little/big endianness after this?
-// TODO: simplify parentheses everywhere
-
 impl Sha256 {
     pub fn new() -> Sha256 {
         Self { h: H_INIT }
+    }
+
+    pub fn reset(&mut self) {
+        self.h = H_INIT;
     }
 
     fn process_block(&mut self, message: &[u32; 16]) {
@@ -75,11 +76,11 @@ impl Sha256 {
     // region internal sha256 functions
 
     fn ch(x: u32, y: u32, z: u32) -> u32 {
-        (x & y) ^ (!x & z)
+        x & y ^ !x & z
     }
 
     fn maj(x: u32, y: u32, z: u32) -> u32 {
-        (x & y) ^ (x & z) ^ (y & z)
+        x & y ^ x & z ^ y & z
     }
 
     fn shr(x: u32, bits: u8) -> u32 {
@@ -87,11 +88,11 @@ impl Sha256 {
     }
 
     fn rotl(x: u32, bits: u8) -> u32 {
-        (x << bits) | (x >> (32 - bits))
+        x << bits | x >> 32 - bits
     }
 
     fn rotr(x: u32, bits: u8) -> u32 {
-        (x >> bits) | (x << (32 - bits))
+        x >> bits | x << 32 - bits
     }
 
     fn bsig0(x: u32) -> u32 {
@@ -158,12 +159,7 @@ impl Sha256 {
     }
 
     pub fn finish_hex(&self) -> String {
-        self.finish()
-            .iter()
-            .map(|b| format!("{:02x}", b))
-            // TODO: can we make this with collect natively (with String type as target)
-            .collect::<Vec<String>>()
-            .join("")
+        self.finish().iter().map(|b| format!("{:02x}", b)).collect()
     }
 }
 
@@ -201,14 +197,18 @@ mod tests {
     fn empty() {
         let mut sha = Sha256::new();
         sha.update_bytes(&[]);
-        assert_eq!(sha.finish_hex(), "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")
+        assert_eq!(
+            sha.finish_hex(),
+            "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        )
     }
 
     #[bench]
     fn bench_single_block(b: &mut Bencher) {
+        let data = "hallo";
         b.iter(|| {
             let mut sha = Sha256::new();
-            sha.update_string("hallo");
+            sha.update_string(data);
             sha.finish_hex()
         })
     }
