@@ -3,10 +3,6 @@
 
 use std::convert::TryInto;
 
-pub struct Sha256 {
-    h: [u32; 8],
-}
-
 const H_INIT: [u32; 8] = [
     0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19,
 ];
@@ -22,13 +18,57 @@ const K_CONST: [u32; 64] = [
     0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2,
 ];
 
+pub struct Sha256 {
+    h: [u32; 8],
+    buf: Vec<u8>,
+    len: u64,
+}
+
 impl Sha256 {
-    pub fn new() -> Sha256 {
-        Self { h: H_INIT }
+    pub fn new() -> Self {
+        Self {
+            h: H_INIT,
+            buf: vec![],
+            len: 0,
+        }
     }
 
-    pub fn reset(&mut self) {
-        self.h = H_INIT;
+    pub fn update_bytes(&mut self, data: &[u8]) {
+        self.len += (data.len() * 8) as u64;
+        self.buf.extend_from_slice(data);
+
+        // Divide buf into blocks of size 512 = 64 * 8
+        let chunks = self.buf.chunks_exact(64);
+        let rest = chunks.remainder().to_vec();
+
+        let blocks = chunks
+            .map(|block| Self::convert_u8_to_32(block).try_into().unwrap())
+            .collect::<Vec<[u32; 16]>>();
+
+        for block in blocks {
+            self.process_block(&block.try_into().unwrap())
+        }
+
+        self.buf = rest;
+    }
+
+    pub fn update_string(&mut self, data: &str) {
+        self.update_bytes(data.as_bytes())
+    }
+
+    pub fn finish(&mut self) -> [u8; 32] {
+        self.do_final_block();
+        let mut output = vec![];
+
+        for v in self.h.iter() {
+            output.extend_from_slice(&v.to_be_bytes());
+        }
+
+        output.try_into().unwrap()
+    }
+
+    pub fn finish_hex(&mut self) -> String {
+        self.finish().iter().map(|b| format!("{:02x}", b)).collect()
     }
 
     fn process_block(&mut self, message: &[u32; 16]) {
@@ -38,7 +78,7 @@ impl Sha256 {
         }
 
         for t in 16..=63 {
-            w[t] = Sha256::ssig1(w[t - 2]) + w[t - 7] + Sha256::ssig0(w[t - 15]) + w[t - 16]
+            w[t] = Self::ssig1(w[t - 2]) + w[t - 7] + Self::ssig0(w[t - 15]) + w[t - 16]
         }
 
         let mut a = self.h[0];
@@ -51,8 +91,8 @@ impl Sha256 {
         let mut h = self.h[7];
 
         for t in 0..=63 {
-            let t1 = h + Sha256::bsig1(e) + Sha256::ch(e, f, g) + K_CONST[t] + w[t];
-            let t2 = Sha256::bsig0(a) + Sha256::maj(a, b, c);
+            let t1 = h + Self::bsig1(e) + Self::ch(e, f, g) + K_CONST[t] + w[t];
+            let t2 = Self::bsig0(a) + Self::maj(a, b, c);
             h = g;
             g = f;
             f = e;
@@ -71,6 +111,29 @@ impl Sha256 {
         self.h[5] += f;
         self.h[6] += g;
         self.h[7] += h;
+    }
+
+    fn do_final_block(&mut self) {
+        assert!(self.buf.len() < 56);
+
+        // Push 1 finish signifier and pad missing zeros.
+        self.buf.push(0x80);
+        while self.buf.len() < 56 {
+            self.buf.push(0);
+        }
+
+        // Push length (64 bit, 8 byte to fill buf to 64 bytes)
+        let bytes = self.len.to_be_bytes();
+        self.buf.extend_from_slice(&bytes);
+
+        let last_block = Self::convert_u8_to_32(&self.buf);
+        self.process_block(&last_block.try_into().unwrap());
+    }
+
+    fn convert_u8_to_32(data: &[u8]) -> Vec<u32> {
+        data.chunks_exact(4) // 4 * 8 bits for 32 bits
+            .map(|chunk| u32::from_be_bytes(chunk.try_into().unwrap()))
+            .collect::<Vec<u32>>()
     }
 
     // region internal sha256 functions
@@ -96,78 +159,31 @@ impl Sha256 {
     }
 
     fn bsig0(x: u32) -> u32 {
-        Sha256::rotr(x, 2) ^ Sha256::rotr(x, 13) ^ Sha256::rotr(x, 22)
+        Self::rotr(x, 2) ^ Self::rotr(x, 13) ^ Self::rotr(x, 22)
     }
 
     fn bsig1(x: u32) -> u32 {
-        Sha256::rotr(x, 6) ^ Sha256::rotr(x, 11) ^ Sha256::rotr(x, 25)
+        Self::rotr(x, 6) ^ Self::rotr(x, 11) ^ Self::rotr(x, 25)
     }
 
     fn ssig0(x: u32) -> u32 {
-        Sha256::rotr(x, 7) ^ Sha256::rotr(x, 18) ^ Sha256::shr(x, 3)
+        Self::rotr(x, 7) ^ Self::rotr(x, 18) ^ Self::shr(x, 3)
     }
 
     fn ssig1(x: u32) -> u32 {
-        Sha256::rotr(x, 17) ^ Sha256::rotr(x, 19) ^ Sha256::shr(x, 10)
+        Self::rotr(x, 17) ^ Self::rotr(x, 19) ^ Self::shr(x, 10)
     }
 
     // endregion
-
-    // TODO: currently multiple calls to update are not supported because
-    // final header with size should only be done when finishing
-
-    pub fn update_bytes(&mut self, data: &[u8]) {
-        let mut data = data.to_vec();
-        let input_len = (data.len() * 8) as u64; // length of input in bits
-
-        data.push(0x80);
-        while (data.len() * 8) % 512 < 448 {
-            data.push(0x00);
-        }
-
-        // Push length
-        let bytes = input_len.to_be_bytes();
-        data.extend_from_slice(&bytes);
-
-        assert_eq!((data.len() * 8) % 512, 0);
-
-        // Convert u8 to u32
-        let data = data
-            .chunks_exact(4)
-            .map(|chunk| u32::from_be_bytes(chunk.try_into().unwrap()))
-            .collect::<Vec<u32>>();
-
-        // Convert u32 into blocks and process them.
-        for chunk in data.chunks_exact(16) {
-            let block: &[u32; 16] = chunk.try_into().unwrap();
-            self.process_block(block);
-        }
-    }
-
-    pub fn update_string(&mut self, data: &str) {
-        self.update_bytes(data.as_bytes())
-    }
-
-    pub fn finish(&self) -> [u8; 32] {
-        let mut output = vec![];
-
-        for v in self.h.iter() {
-            output.extend_from_slice(&v.to_be_bytes());
-        }
-
-        output.try_into().unwrap()
-    }
-
-    pub fn finish_hex(&self) -> String {
-        self.finish().iter().map(|b| format!("{:02x}", b)).collect()
-    }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::Sha256;
-    extern crate test;
     use test::Bencher;
+
+    use crate::Sha256;
+
+    extern crate test;
 
     // TODO: replace with more extensive tests
     #[test]
@@ -196,10 +212,20 @@ mod tests {
     #[test]
     fn empty() {
         let mut sha = Sha256::new();
-        sha.update_bytes(&[]);
         assert_eq!(
             sha.finish_hex(),
             "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        )
+    }
+
+    #[test]
+    fn multiple_update_calls() {
+        let mut sha = Sha256::new();
+        sha.update_string("abc");
+        sha.update_string("def");
+        assert_eq!(
+            sha.finish_hex(),
+            "bef57ec7f53a6d40beb640a780a639c83bc29ac8a9816f1fc6c5c6dcd93c4721"
         )
     }
 
