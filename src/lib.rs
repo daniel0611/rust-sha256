@@ -24,6 +24,12 @@ pub struct Sha256 {
     len: u64,
 }
 
+impl Default for Sha256 {
+    fn default() -> Self {
+        Sha256::new()
+    }
+}
+
 impl Sha256 {
     pub fn new() -> Self {
         Self {
@@ -46,7 +52,7 @@ impl Sha256 {
             .collect::<Vec<[u32; 16]>>();
 
         for block in blocks {
-            self.process_block(&block.try_into().unwrap())
+            self.process_block(&block)
         }
 
         self.buf = rest;
@@ -71,6 +77,7 @@ impl Sha256 {
         self.finish().iter().map(|b| format!("{:02x}", b)).collect()
     }
 
+    #[allow(clippy::many_single_char_names)] // this is sha256 and these names are used in the spec
     fn process_block(&mut self, message: &[u32; 16]) {
         let mut w = [0u32; 64];
         for (t, v) in message.iter().enumerate() {
@@ -151,11 +158,11 @@ impl Sha256 {
     }
 
     fn rotl(x: u32, bits: u8) -> u32 {
-        x << bits | x >> 32 - bits
+        x << bits | x >> (32 - bits)
     }
 
     fn rotr(x: u32, bits: u8) -> u32 {
-        x >> bits | x << 32 - bits
+        x >> bits | x << (32 - bits)
     }
 
     fn bsig0(x: u32) -> u32 {
