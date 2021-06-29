@@ -91,7 +91,7 @@ impl Sha256 {
         }
 
         for t in 16..=63 {
-            w[t] = Self::ssig1(w[t - 2]) + w[t - 7] + Self::ssig0(w[t - 15]) + w[t - 16]
+            w[t] = Self::ssig1(w[t - 2]).wrapping_add(w[t - 7].wrapping_add(Self::ssig0(w[t - 15]).wrapping_add(w[t - 16])))
         }
 
         let mut a = self.h[0];
@@ -104,26 +104,26 @@ impl Sha256 {
         let mut h = self.h[7];
 
         for t in 0..=63 {
-            let t1 = h + Self::bsig1(e) + Self::ch(e, f, g) + K_CONST[t] + w[t];
-            let t2 = Self::bsig0(a) + Self::maj(a, b, c);
+            let t1 = h.wrapping_add(Self::bsig1(e).wrapping_add(Self::ch(e, f, g).wrapping_add(K_CONST[t]).wrapping_add(w[t])));
+            let t2 = Self::bsig0(a).wrapping_add(Self::maj(a, b, c));
             h = g;
             g = f;
             f = e;
-            e = d + t1;
+            e = d.wrapping_add(t1);
             d = c;
             c = b;
             b = a;
-            a = t1 + t2;
+            a = t1.wrapping_add(t2);
         }
 
-        self.h[0] += a;
-        self.h[1] += b;
-        self.h[2] += c;
-        self.h[3] += d;
-        self.h[4] += e;
-        self.h[5] += f;
-        self.h[6] += g;
-        self.h[7] += h;
+        self.h[0] = self.h[0].wrapping_add(a);
+        self.h[1] = self.h[1].wrapping_add(b);
+        self.h[2] = self.h[2].wrapping_add(c);
+        self.h[3] = self.h[3].wrapping_add(d);
+        self.h[4] = self.h[4].wrapping_add(e);
+        self.h[5] = self.h[5].wrapping_add(f);
+        self.h[6] = self.h[6].wrapping_add(g);
+        self.h[7] = self.h[7].wrapping_add(h);
     }
 
     fn do_final_block(&mut self) {
