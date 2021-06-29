@@ -39,6 +39,12 @@ impl Sha256 {
         }
     }
 
+    pub fn reset(&mut self) {
+        self.h = H_INIT;
+        self.buf.clear();
+        self.len = 0;
+    }
+
     pub fn update_bytes(&mut self, data: &[u8]) {
         self.len += (data.len() * 8) as u64;
         self.buf.extend_from_slice(data);
@@ -239,10 +245,12 @@ mod tests {
     #[bench]
     fn bench_single_block(b: &mut Bencher) {
         let data = "hallo";
+        let mut sha = Sha256::new();
         b.iter(|| {
-            let mut sha = Sha256::new();
+            sha.reset();
             sha.update_string(data);
-            sha.finish_hex()
+            let result = sha.finish_hex();
+            assert_eq!(result, "d3751d33f9cd5049c4af2b462735457e4d3baf130bcbb87f389e349fbaeb20b9")
         })
     }
 }
