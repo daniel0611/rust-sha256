@@ -91,7 +91,8 @@ impl Sha256 {
         }
 
         for t in 16..=63 {
-            w[t] = Self::ssig1(w[t - 2]).wrapping_add(w[t - 7].wrapping_add(Self::ssig0(w[t - 15]).wrapping_add(w[t - 16])))
+            w[t] = Self::ssig1(w[t - 2])
+                .wrapping_add(w[t - 7].wrapping_add(Self::ssig0(w[t - 15]).wrapping_add(w[t - 16])))
         }
 
         let mut a = self.h[0];
@@ -104,7 +105,13 @@ impl Sha256 {
         let mut h = self.h[7];
 
         for t in 0..=63 {
-            let t1 = h.wrapping_add(Self::bsig1(e).wrapping_add(Self::ch(e, f, g).wrapping_add(K_CONST[t]).wrapping_add(w[t])));
+            let t1 = h.wrapping_add(
+                Self::bsig1(e).wrapping_add(
+                    Self::ch(e, f, g)
+                        .wrapping_add(K_CONST[t])
+                        .wrapping_add(w[t]),
+                ),
+            );
             let t2 = Self::bsig0(a).wrapping_add(Self::maj(a, b, c));
             h = g;
             g = f;
@@ -192,11 +199,12 @@ impl Sha256 {
 
 #[cfg(test)]
 mod tests {
+    extern crate test;
+
+    use std::fs;
     use test::Bencher;
 
     use crate::Sha256;
-
-    extern crate test;
 
     // TODO: replace with more extensive tests
     #[test]
@@ -242,6 +250,25 @@ mod tests {
         )
     }
 
+    #[test]
+    fn numbers_to_1000() {
+        let mut sha = Sha256::new();
+        let expected_file_content = fs::read_to_string("./test_number_1000.txt")
+            .expect("Couldn't read expected outputs from file");
+        let expected = expected_file_content
+            .split("\n")
+            .filter(|line| !line.is_empty())
+            .collect::<Vec<&str>>();
+
+        for i in 0..=1000 {
+            sha.reset();
+            let input = format!("{}", i);
+            sha.update_string(&input);
+            let output = sha.finish_hex();
+            assert_eq!(output, expected[i]);
+        }
+    }
+
     #[bench]
     fn bench_single_block(b: &mut Bencher) {
         let data = "hallo";
@@ -250,7 +277,10 @@ mod tests {
             sha.reset();
             sha.update_string(data);
             let result = sha.finish_hex();
-            assert_eq!(result, "d3751d33f9cd5049c4af2b462735457e4d3baf130bcbb87f389e349fbaeb20b9")
+            assert_eq!(
+                result,
+                "d3751d33f9cd5049c4af2b462735457e4d3baf130bcbb87f389e349fbaeb20b9"
+            )
         })
     }
 }
