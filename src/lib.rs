@@ -3,6 +3,8 @@
 
 use std::convert::TryInto;
 
+// Sha256 implementation according to RFC 6234 (https://datatracker.ietf.org/doc/html/rfc6234)
+
 const H_INIT: [u32; 8] = [
     0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19,
 ];
@@ -206,7 +208,6 @@ mod tests {
 
     use crate::Sha256;
 
-    // TODO: replace with more extensive tests
     #[test]
     fn works_basic() {
         let mut sha = Sha256::new();
